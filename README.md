@@ -146,7 +146,7 @@ public partial class StringHolder
 }
 ```
 
-We would setup 2 `Gtk.SignalListItemFactory`, 1st to setup and bind drop down items and 2nd to setup list and bind dropdown items when item is selected.
+We would setup 2 instances of `Gtk.SignalListItemFactory`, 1st to setup and bind drop down items and 2nd to setup list and bind dropdown items when item is selected.
 ```csharp
         var selectedFactory = Gtk.SignalListItemFactory.New();
         selectedFactory.OnSetup += OnSetupSelectedItem;
@@ -269,7 +269,7 @@ For selected item however we also display `Description` and a tickbox image next
     }
 ```
 
-Running the application will following
+Running the application will display following
 
 <figure>
   <a href="images/06-complex-dropdown.png"><img src="images/06-complex-dropdown.png"></a>
