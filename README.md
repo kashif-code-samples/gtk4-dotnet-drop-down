@@ -1,4 +1,6 @@
 # Drop Down with GTK4 and .NET
+In this post I will make use of [GTK4 DropDown](https://docs.gtk.org/gtk4/class.DropDown.html). DropDown is used to display selected item from a list of items.  
+
 ## Project Setup
 Let's start by installing/updating the `dotnet new` [GTK4 .NET Project Template] (https://github.com/kashif-code-samples/gtk4-dotnet-template).  
 
