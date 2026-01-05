@@ -27,14 +27,12 @@ public partial class WithStringList
         _dropDown.SetMarginStart(12);
         _dropDown.SetMarginEnd(12);
         
-        Gtk.DropDown.SelectedPropertyDefinition.Notify(
-            _dropDown,
-            (_, _) =>
-            {
-                var selectedItem = (Gtk.StringObject)_dropDown.SelectedItem!;
-                var interval = selectedItem.GetString();
-                _labelSelected.SetLabel($"Selected: {interval}");
-            });
+        _dropDown.OnNotify += (_, _) =>
+        {
+            var selectedItem = (Gtk.StringObject)_dropDown.SelectedItem!;
+            var interval = selectedItem.GetString();
+            _labelSelected.SetLabel($"Selected: {interval}");
+        };
         
         var gtkBox = Gtk.Box.New(Gtk.Orientation.Vertical, 0);
         gtkBox.Append(_labelSelected);

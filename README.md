@@ -91,14 +91,12 @@ And then update the `Initialize` method to initialize label and dropdown.
         _dropDown.SetMarginStart(12);
         _dropDown.SetMarginEnd(12);
         
-        Gtk.DropDown.SelectedPropertyDefinition.Notify(
-            _dropDown,
-            (_, _) =>
-            {
-                var selectedItem = (Gtk.StringObject)_dropDown.SelectedItem!;
-                var interval = selectedItem.GetString();
-                _labelSelected.SetLabel($"Selected: {interval}");
-            });
+        _dropDown.OnNotify += (_, _) =>
+        {
+            var selectedItem = (Gtk.StringObject)_dropDown.SelectedItem!;
+            var interval = selectedItem.GetString();
+            _labelSelected.SetLabel($"Selected: {interval}");
+        };
         
         var gtkBox = Gtk.Box.New(Gtk.Orientation.Vertical, 0);
         gtkBox.Append(_labelSelected);
@@ -123,6 +121,162 @@ Following screenshots show the initial, dropdown and selection for simple DropDo
 <figure>
   <a href="images/05-string-list-selected.png"><img src="images/05-string-list-selected.png"></a>
   <figcaption>With StringList Selected</figcaption>
+</figure>
+
+## Complex DropDown
+Let's go through with a complex example, where we display a Title, Description and an image. There will be another tickbox next to the selected item.
+
+First let's add a custom object `StringHolder` to use in the model.
+```csharp
+[GObject.Subclass<GObject.Object>]
+public partial class StringHolder
+{
+    public StringHolder(string title, string icon, string description) : this()
+    {
+        Title = title;
+        Icon = icon;
+        Description = description;
+    }
+    
+    public string Title { get; }
+    public string Icon { get; }
+    public string Description { get; }
+}
+```
+
+We would setup 2 `Gtk.SignalListItemFactory`, 1st to setup and bind drop down items and 2nd to setup list and bind dropdown items when item is selected.
+```csharp
+        var selectedFactory = Gtk.SignalListItemFactory.New();
+        selectedFactory.OnSetup += OnSetupSelectedItem;
+        selectedFactory.OnBind += OnBindSelectedItem;
+        _dropDown.SetFactory(selectedFactory);
+        
+        // Factory for presenting the items in the dropdown list.
+        var listFactory = Gtk.SignalListItemFactory.New();
+        listFactory.OnSetup += OnSetupListItem;
+        listFactory.OnBind += OnBindListItem;
+        _dropDown.SetListFactory(listFactory);
+```
+
+Then we create the `Gio.ListStore` and set the dropdown's model.
+```csharp
+        ...
+        CreateModel();
+        _dropDown.SetModel(_listStore);
+        _dropDown.SetSelected(0);
+        ...
+
+    private void CreateModel()
+    {
+        _listStore = Gio.ListStore.New(StringHolder.GetGType());
+        _listStore.Append(new StringHolder("Deskop", "user-desktop-symbolic", "Deskop Folder"));
+        _listStore.Append(new StringHolder("Home", "user-home-symbolic", "Home Folder"));
+        _listStore.Append(new StringHolder("Trash", "user-trash-symbolic", "Trash Folder"));
+        _listStore.Append(new StringHolder("Videos", "folder-videos-symbolic", "Videos Folder"));
+    }
+```
+
+For selected item, we only display an `Image` and `Label` and display `Icon` and `Title` property from the model.
+```csharp
+    private static void OnSetupSelectedItem(Gtk.SignalListItemFactory factory, Gtk.SignalListItemFactory.SetupSignalArgs args)
+    {
+        var listItem = args.Object as Gtk.ListItem;
+        var box = Gtk.Box.New(Gtk.Orientation.Horizontal, 10);
+        box.Append(Gtk.Image.New());
+        box.Append(Gtk.Label.New(""));
+        listItem!.SetChild(box);
+    }
+
+    private static void OnBindSelectedItem(Gtk.SignalListItemFactory sender, Gtk.SignalListItemFactory.BindSignalArgs args)
+    {
+        var listItem = args.Object as Gtk.ListItem;
+        var stringHolder = listItem!.GetItem() as StringHolder;
+        if (stringHolder is null) return;
+        
+        var box = listItem.GetChild() as Gtk.Box;
+        if (box is null) return;
+        
+        var image = box.GetFirstChild() as Gtk.Image;
+        if (image is null) return;
+        
+        image.SetFromIconName(stringHolder.Icon);
+        var label = image.GetNextSibling() as Gtk.Label;
+        if (label is null) return;
+        
+        label.SetText(stringHolder.Title);
+    }
+```
+
+For selected item however we also display `Description` and a tickbox image next to the selected item.
+```csharp
+    private static void OnSetupListItem(Gtk.SignalListItemFactory factory, Gtk.SignalListItemFactory.SetupSignalArgs args)
+    {
+        var listItem = args.Object as Gtk.ListItem;
+        
+        var hbox = Gtk.Box.New(Gtk.Orientation.Horizontal, 10);
+        var vbox = Gtk.Box.New(Gtk.Orientation.Vertical, 2);
+        
+        hbox.Append(Gtk.Image.New());
+        hbox.Append(vbox);
+        
+        var lblTitle = Gtk.Label.New("");
+        lblTitle.SetXalign(0);
+        vbox.Append(lblTitle);
+        
+        var lblDescription = Gtk.Label.New("");
+        lblDescription.SetXalign(0);
+        lblDescription.SetCssClasses(["dim-label"]);
+        vbox.Append(lblDescription);
+
+        var checkmark = Gtk.Image.New();
+        checkmark.SetFromIconName("object-select-symbolic");
+        checkmark.SetVisible(false);
+        hbox.Append(checkmark);
+        
+        listItem!.SetChild(hbox);
+    }
+
+    private void OnBindListItem(Gtk.SignalListItemFactory sender, Gtk.SignalListItemFactory.BindSignalArgs args)
+    {
+        var listItem = args.Object as Gtk.ListItem;
+        
+        var stringHolder = listItem!.GetItem() as StringHolder;
+        if (stringHolder is null) return;
+        
+        var hbox = listItem.GetChild() as Gtk.Box;
+        if (hbox is null) return;
+        
+        var image = hbox.GetFirstChild() as Gtk.Image;
+        image?.SetFromIconName(stringHolder.Icon);
+
+        var vbox = image?.GetNextSibling() as Gtk.Box;
+        if (vbox is null) return;
+        
+        var title = vbox.GetFirstChild() as Gtk.Label;
+        title?.SetText(stringHolder.Title);
+        var description = title?.GetNextSibling() as Gtk.Label;
+        description?.SetText(stringHolder.Description);
+        
+        Gtk.DropDown.SelectedPropertyDefinition.Notify(_dropDown, (_, _) =>
+        {
+            OnSelectedItemChanged(listItem);
+        });
+        
+        listItem.SetData("connection", IntPtr.Zero);
+        OnSelectedItemChanged(listItem);
+    }
+```
+
+Running the application will following
+
+<figure>
+  <a href="images/06-complex-dropdown.png"><img src="images/06-complex-dropdown.png"></a>
+  <figcaption>Complex DropDown with ListStore</figcaption>
+</figure>
+
+<figure>
+  <a href="images/07-complex-dropdown-selected.png"><img src="images/07-complex-dropdown-selected.png"></a>
+  <figcaption>Complex DropDown with ListStore Selected</figcaption>
 </figure>
 
 ## Source
