@@ -4,16 +4,16 @@ var application = Gtk.Application.New("org.kashif-code-samples.drop-down", Gio.A
 application.OnActivate += (sender, args) =>
 {
     var buttonShowWithStringList = CreateButton("Show With StringList");
-    buttonShowWithStringList.OnClicked += (_, _) => new WithStringList().Show();
+    buttonShowWithStringList.OnClicked += (_, _) => WithStringList.NewWithProperties([]).Show();
 
     var buttonShowWithListStore = CreateButton("Show With List Store");
-    buttonShowWithListStore.OnClicked += (_, _) => new WithListStore().Show();
+    buttonShowWithListStore.OnClicked += (_, _) => WithListStore.NewWithProperties([]).Show();
 
     var gtkBox = Gtk.Box.New(Gtk.Orientation.Vertical, 0);
     gtkBox.Append(buttonShowWithStringList);
     gtkBox.Append(buttonShowWithListStore);
 
-    var window = Gtk.ApplicationWindow.New((Gtk.Application)sender);
+    var window = Gtk.ApplicationWindow.New((Gtk.Application) sender);
     window.Title = "GTK DropDown Sample App";
     window.SetDefaultSize(300, 300);
     window.Child = gtkBox;

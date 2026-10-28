@@ -1,179 +1,206 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace DropDown;
 
 [GObject.Subclass<Gtk.ApplicationWindow>]
 public partial class WithListStore
 {
     private Gtk.Label _labelSelected;
-    private Gtk.DropDown _dropDown;
-    private Gio.ListStore _listStore;
-    
+    private MyDropDown _dropDown;
+
+    [MemberNotNull(nameof(_labelSelected), nameof(_dropDown))]
     partial void Initialize()
     {
         Title = "DropDown With List Store";
         SetDefaultSize(300, 300);
-        
+
         _labelSelected = Gtk.Label.New("Selected title:");
         _labelSelected.SetMarginTop(12);
-        _labelSelected.SetMarginBottom(12);
         _labelSelected.SetMarginStart(12);
         _labelSelected.SetMarginEnd(12);
 
-        _dropDown = new Gtk.DropDown();
-        _dropDown.SetMarginTop(12);
-        _dropDown.SetMarginBottom(12);
+        _dropDown = MyDropDown.NewWithProperties([]);
+        _dropDown.OnNotify += OnDropDownChanged;
         _dropDown.SetMarginStart(12);
         _dropDown.SetMarginEnd(12);
-        
-        // Factory for presenting the selected item.
-        var selectedFactory = Gtk.SignalListItemFactory.New();
-        selectedFactory.OnSetup += OnSetupSelectedItem;
-        selectedFactory.OnBind += OnBindSelectedItem;
-        _dropDown.SetFactory(selectedFactory);
-        
-        // Factory for presenting the items in the dropdown list.
-        var listFactory = Gtk.SignalListItemFactory.New();
-        listFactory.OnSetup += OnSetupListItem;
-        listFactory.OnBind += OnBindListItem;
-        _dropDown.SetListFactory(listFactory);
 
-        CreateModel();
-        _dropDown.SetModel(_listStore);
-        _dropDown.SetSelected(0);
-
-        _dropDown.OnNotify += OnDropDownChanged;
-        
-        var gtkBox = Gtk.Box.New(Gtk.Orientation.Vertical, 0);
+        var gtkBox = Gtk.Box.New(Gtk.Orientation.Vertical, 12);
         gtkBox.Append(_labelSelected);
         gtkBox.Append(_dropDown);
 
         Child = gtkBox;
     }
 
-    private void OnDropDownChanged(Object sender, NotifySignalArgs args)
+    private void OnDropDownChanged(GObject.Object sender, NotifySignalArgs args)
     {
-        var dropDown = sender as Gtk.DropDown;
-        var selectedItem = dropDown?.SelectedItem as StringHolder;
+        var dropDown = sender as MyDropDown;
+        var selectedItem = dropDown?.SelectedItem as DropDownData;
         var title = selectedItem?.Title;
-        _labelSelected.SetLabel($"Selected title:  {title}");
+        _labelSelected.SetLabel($"Selected title: {title}");
+    }
+}
+
+[GObject.Subclass<Gtk.DropDown>]
+public partial class MyDropDown
+{
+    partial void Initialize()
+    {
+        // Factory for presenting the selected item.
+        var selectedFactory = Gtk.SignalListItemFactory.New();
+        selectedFactory.OnSetup += OnSetupSelectedItem;
+        selectedFactory.OnBind += OnBindSelectedItem;
+        SetFactory(selectedFactory);
+
+        // Factory for presenting the items in the dropdown list.
+        var listFactory = Gtk.SignalListItemFactory.New();
+        listFactory.OnSetup += OnSetupListItem;
+        listFactory.OnBind += OnBindListItem;
+        SetListFactory(listFactory);
+
+        SetModel(CreateModel());
     }
 
-    private void CreateModel()
+    private static Gio.ListStore CreateModel()
     {
-        _listStore = Gio.ListStore.New(StringHolder.GetGType());
-        _listStore.Append(new StringHolder("Deskop", "user-desktop-symbolic", "Deskop Folder"));
-        _listStore.Append(new StringHolder("Home", "user-home-symbolic", "Home Folder"));
-        _listStore.Append(new StringHolder("Trash", "user-trash-symbolic", "Trash Folder"));
-        _listStore.Append(new StringHolder("Videos", "folder-videos-symbolic", "Videos Folder"));
+        var listStore = Gio.ListStore.New<DropDownData>();
+        listStore.Append(DropDownData.New("Deskop", "user-desktop-symbolic", "Deskop Folder"));
+        listStore.Append(DropDownData.New("Home", "user-home-symbolic", "Home Folder"));
+        listStore.Append(DropDownData.New("Trash", "user-trash-symbolic", "Trash Folder"));
+        listStore.Append(DropDownData.New("Videos", "folder-videos-symbolic", "Videos Folder"));
+
+        return listStore;
     }
 
     private static void OnSetupSelectedItem(Gtk.SignalListItemFactory factory, Gtk.SignalListItemFactory.SetupSignalArgs args)
     {
         var listItem = args.Object as Gtk.ListItem;
-        var box = Gtk.Box.New(Gtk.Orientation.Horizontal, 10);
-        box.Append(Gtk.Image.New());
-        box.Append(Gtk.Label.New(""));
-        listItem!.SetChild(box);
+        listItem?.SetChild(SelectedDropDownItem.NewWithProperties([]));
     }
 
     private static void OnBindSelectedItem(Gtk.SignalListItemFactory sender, Gtk.SignalListItemFactory.BindSignalArgs args)
     {
         var listItem = args.Object as Gtk.ListItem;
-        var stringHolder = listItem!.GetItem() as StringHolder;
-        if (stringHolder is null) return;
-        
-        var box = listItem.GetChild() as Gtk.Box;
-        if (box is null) return;
-        
-        var image = box.GetFirstChild() as Gtk.Image;
-        if (image is null) return;
-        
-        image.SetFromIconName(stringHolder.Icon);
-        var label = image.GetNextSibling() as Gtk.Label;
-        if (label is null) return;
-        
-        label.SetText(stringHolder.Title);
+        if (listItem?.GetItem() is not DropDownData data)
+            return;
+
+        var item = listItem.GetChild() as SelectedDropDownItem;
+        item?.Bind(data);
     }
-    
+
     private static void OnSetupListItem(Gtk.SignalListItemFactory factory, Gtk.SignalListItemFactory.SetupSignalArgs args)
     {
         var listItem = args.Object as Gtk.ListItem;
-        
-        var hbox = Gtk.Box.New(Gtk.Orientation.Horizontal, 10);
-        var vbox = Gtk.Box.New(Gtk.Orientation.Vertical, 2);
-        
-        hbox.Append(Gtk.Image.New());
-        hbox.Append(vbox);
-        
-        var lblTitle = Gtk.Label.New("");
-        lblTitle.SetXalign(0);
-        vbox.Append(lblTitle);
-        
-        var lblDescription = Gtk.Label.New("");
-        lblDescription.SetXalign(0);
-        lblDescription.SetCssClasses(["dim-label"]);
-        vbox.Append(lblDescription);
-
-        var checkmark = Gtk.Image.New();
-        checkmark.SetFromIconName("object-select-symbolic");
-        checkmark.SetVisible(false);
-        hbox.Append(checkmark);
-        
-        listItem!.SetChild(hbox);
+        listItem?.SetChild(DropDownItem.NewWithProperties([]));
     }
 
     private void OnBindListItem(Gtk.SignalListItemFactory sender, Gtk.SignalListItemFactory.BindSignalArgs args)
     {
         var listItem = args.Object as Gtk.ListItem;
-        
-        var stringHolder = listItem!.GetItem() as StringHolder;
-        if (stringHolder is null) return;
-        
-        var hbox = listItem.GetChild() as Gtk.Box;
-        if (hbox is null) return;
-        
-        var image = hbox.GetFirstChild() as Gtk.Image;
-        image?.SetFromIconName(stringHolder.Icon);
+        if (listItem?.GetItem() is not DropDownData data)
+            return;
 
-        var vbox = image?.GetNextSibling() as Gtk.Box;
-        if (vbox is null) return;
-        
-        var title = vbox.GetFirstChild() as Gtk.Label;
-        title?.SetText(stringHolder.Title);
-        var description = title?.GetNextSibling() as Gtk.Label;
-        description?.SetText(stringHolder.Description);
-        
-        Gtk.DropDown.SelectedPropertyDefinition.Notify(_dropDown, (_, _) =>
+        var item = listItem.GetChild() as DropDownItem;
+        item?.Bind(data);
+
+        SelectedItemPropertyDefinition.Notify(this, (_, _) =>
         {
             OnSelectedItemChanged(listItem);
         });
-        
-        listItem.SetData("connection", IntPtr.Zero);
+
         OnSelectedItemChanged(listItem);
     }
 
     private void OnSelectedItemChanged(Gtk.ListItem listItem)
     {
-        var hbox = listItem.GetChild() as Gtk.Box;
-        if (hbox is null) return;
-        
-        var checkmark = hbox.GetLastChild() as Gtk.Image;
-        if (checkmark is null) return;
-        
-        checkmark.SetVisible(_dropDown.GetSelectedItem() == listItem.Item);
+        var item = listItem.GetChild() as DropDownItem;
+        item?.SetCheckmarkVisible(GetSelectedItem() == listItem.Item);
+    }
+
+    [GObject.Subclass<Gtk.Box>]
+    internal partial class SelectedDropDownItem
+    {
+        private readonly Gtk.Image _image = Gtk.Image.New();
+        private readonly Gtk.Label _title = Gtk.Label.New("");
+
+        partial void Initialize()
+        {
+            SetOrientation(Gtk.Orientation.Horizontal);
+            SetSpacing(10);
+
+            Append(_image);
+            Append(_title);
+        }
+
+        public void Bind(DropDownData dropDownData)
+        {
+            _image.SetFromIconName(dropDownData.Icon);
+            _title.SetText(dropDownData.Title ?? string.Empty);
+        }
+    }
+
+    [GObject.Subclass<Gtk.Box>]
+    internal partial class DropDownItem
+    {
+        private readonly Gtk.Image _image = Gtk.Image.New();
+        private readonly Gtk.Label _title = Gtk.Label.New("");
+        private readonly Gtk.Label _description = Gtk.Label.New("");
+        private readonly Gtk.Image _checkmark = Gtk.Image.NewFromIconName("object-select-symbolic");
+
+        partial void Initialize()
+        {
+            SetOrientation(Gtk.Orientation.Horizontal);
+            SetSpacing(10);
+            ConfigureWidgets();
+
+            Append(_image);
+            Append(CreateVBox());
+            Append(_checkmark);
+        }
+
+        private void ConfigureWidgets()
+        {
+            _title.SetXalign(0);
+            _description.SetXalign(0);
+            _description.SetCssClasses(["dim-label"]);
+            _checkmark.SetVisible(false);
+        }
+
+        private Gtk.Box CreateVBox()
+        {
+            var vbox = Gtk.Box.New(Gtk.Orientation.Vertical, 2);
+            vbox.Append(_title);
+            vbox.Append(_description);
+            return vbox;
+        }
+
+        public void Bind(DropDownData dropDownData)
+        {
+            _image.SetFromIconName(dropDownData.Icon);
+            _title.SetText(dropDownData.Title ?? string.Empty);
+            _description.SetText(dropDownData.Description ?? string.Empty);
+        }
+
+        public void SetCheckmarkVisible(bool visible)
+        {
+            _checkmark.SetVisible(visible);
+        }
     }
 }
 
 [GObject.Subclass<GObject.Object>]
-public partial class StringHolder
+public partial class DropDownData
 {
-    public StringHolder(string title, string icon, string description) : this()
+    public static DropDownData New(string title, string icon, string description)
     {
-        Title = title;
-        Icon = icon;
-        Description = description;
+        var obj = NewWithProperties([]);
+        obj.Title = title;
+        obj.Icon = icon;
+        obj.Description = description;
+
+        return obj;
     }
-    
-    public string Title { get; }
-    public string Icon { get; }
-    public string Description { get; }
+
+    public string? Title { get; private set; }
+    public string? Icon { get; private set; }
+    public string? Description { get; private set; }
 }
